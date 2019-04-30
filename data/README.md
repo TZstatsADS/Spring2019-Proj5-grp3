@@ -1,5 +1,6 @@
 # Project: 
 ### Data folder
 
-The data directory contains data used in the analysis. This is treated as read only; in paricular the R/python files are never allowed to write to the files in here. Depending on the project, these might be csv files, a database, and the directory itself may have subdirectories.
+Data for the project is a csv file with about 30,000 observations and 96 variables. It describes Airbnb listings. the dataset can be downloaded from this link https://drive.google.com/open?id=1UiqMTvYjCU2gwvGLeLKQ15FSxpEplDT1. 
+
 
