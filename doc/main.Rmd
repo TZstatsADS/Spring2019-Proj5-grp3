@@ -5,18 +5,19 @@ date: "May 1st, 2019"
 output: html_document
 ---
 
-Step 00: Load required libraries.
+# Step 1: Load required libraries and sources.
 
 ```{r libraries, echo = FALSE, warning=FALSE, message=FALSE}
+
 if(!require("dplyr")){
   install.packages("dplyr")}
   library(dplyr)
 if(!require("Hmisc")){
   install.packages("Hmisc")}
   library(Hmisc)
-#if(!require("qdap")){
-#  install.packages("qdap")}
-#  library(qdap)
+if(!require("qdap")){
+  install.packages("qdap")}
+  library(qdap)
 if(!require("magrittr")){
   install.packages("magrittr")}
   library(magrittr)
@@ -68,110 +69,33 @@ if(!require("rworldmap")){
 if(!require("RColorBrewer")){
   install.packages("RColorBrewer")}
   library(RColorBrewer)
+
+
+source('../lib/tf_idf.R')
+source('../lib/lda.R')
+
 ```
 
-Step 01: Build functions.
+# Step 2: Read data from working directory.
 
-```{r functions}
-words = c("guest", "room", "apartment")
-getCorpus = function(text) {
-  corpus = VCorpus(VectorSource(text)) %>%
-    tm_map(content_transformer(tolower)) %>%
-    tm_map(removePunctuation) %>%
-    tm_map(removeNumbers) %>%
-    tm_map(stripWhitespace) %>%
-    tm_map(removeWords, stopwords("en")) %>%
-    tm_map(removeWords, stopwords("SMART")) %>%
-    tm_map(removeWords, words)
-  return(corpus)
-}
-# this function is written following the tutorial: https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling and course tutorials
-top_terms_by_topic_LDA = function(text, plot = T, number_of_topics = 4) {    
-  corpus = getCorpus(text)
-  DTM = DocumentTermMatrix(corpus) 
-  
-  unique_indexes = unique(DTM$i) 
-  DTM = DTM[unique_indexes,] 
-  
-  lda = LDA(DTM, k = number_of_topics, method = "Gibbs", control = list(iter = 2000,  thin = 400, nstart = 5, best = T, seed = list(1234, 423, 2211, 1122, 3345)))
-  topics = tidy(lda, matrix = "beta")
-  
-  top_terms = topics %>% 
-    group_by(topic) %>% 
-    top_n(10, beta) %>% 
-    ungroup() %>% 
-    arrange(topic, -beta)
-  
-  if(plot == T){
-    top_terms %>% 
-      mutate(term = reorder(term, beta)) %>% 
-      ggplot(aes(term, beta, fill = factor(topic))) + 
-      geom_col(show.legend = FALSE) + 
-      facet_wrap(~ topic, scales = "free") + 
-      labs(x = NULL, y = "Topic concentration (beta)") + 
-      coord_flip()
-  }else{ 
-    return(top_terms)
-  }
-}
-
-
-# this function is written following the tutorial: https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
-top_terms_by_topic_tfidf = function(text_df, text_column, group_column, plot = T) {
-  group_column = enquo(group_column)
-  text_column = enquo(text_column)
-  
-  words = text_df %>%
-    unnest_tokens(word, !!text_column) %>%
-    count(!!group_column, word) %>% 
-    ungroup()
-  
-  total_words = words %>% 
-    group_by(!!group_column) %>% 
-    summarize(total = sum(n))
-  
-  words = left_join(words, total_words)
-  
-  tf_idf = words %>%
-    bind_tf_idf(word, !!group_column, n) %>%
-    select(-total) %>%
-    arrange(desc(tf_idf)) %>%
-    mutate(word = factor(word, levels = rev(unique(word))))
-  
-  if(plot == T){
-    group_name <- quo_name(group_column)
-    
-    tf_idf %>% 
-      group_by(!!group_column) %>% 
-      top_n(10) %>% 
-      ungroup %>%
-      ggplot(aes(word, tf_idf, fill = as.factor(group_name))) +
-      geom_col(show.legend = F) +
-      labs(x = NULL, y = "tf-idf") +
-      facet_wrap(reformulate(group_name), scales = "free") +
-      coord_flip()
-  }else{
-    return(tf_idf)
-  }
-}
-```
-
-Step 02: Read data from working directory.
+The original data file is approximately 28 MB in compressed state, therefore we download data locally and read it from directory rather than reading it from the “data” folder. Link to download zip file in located in the README.md file in the data folder of the repository. Alternatively, one can skip **Step 2** and **Step 3** and proceed with cleaned and transformed dataset from **Step 4**.
 
 ```{r warning=FALSE, message=FALSE}
-data = read.csv("C:/Users/mkarsok/Downloads/analysisData.csv")
+
+path  = "C:/Users/heldo/Desktop/analysisData.csv"
+data = read.csv(path, header = TRUE)
+
 ```
 
-Step 03: Exploratory Analysis.
+
+# Step 3: Feature generation, data selection.
+
+As we are specifically interested in understanding of what makes a successful and unsucessful listing write up, it is not very efficient to look at all 29,142 observations from the dataset. To extract useful insights, we decided to get rid of listings with "average performance" and come up with two polar samples that present "the best" and "the worst" listings (further defined as "Good" and "Bad"). To measure "goodness" of the listing we created a composite indicator that takes into account score ratings, two measures of popularity (overall number of reviews and number of last month's reviews), and "super host indicator". To reduce bias in the sample, we controlled for location (simultaneously limiting it to most popular options) and price bucket.
 
 ```{r message=FALSE, warning=FALSE}
 hist(data$price, breaks = 100)
 hist(data$reviews_per_month, breaks = 100, xlim = c(0, 10))
-```
 
-Step 04: Setup sampling fields and parameters.
-
-```{r}
  # create price brackets #
 data$price_bkt <- as.numeric(cut2(data$price, g=4))
  # re-create buroughs field #
@@ -201,9 +125,13 @@ polar_data <- data %>%
 table(polar_data$strat, polar_data$category)
 ```
 
+
+
 Step 05: Calculate the examine the length of the listing variables.
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+
  # calculate the length #
 polar_data = polar_data %>% mutate(total_length = nchar(as.character(description))+nchar(as.character(summary))+nchar(as.character(space))+nchar(as.character(neighborhood_overview))+nchar(as.character(notes))+nchar(as.character(transit))+nchar(as.character(access))+nchar(as.character(interaction))+nchar(as.character(house_rules))+nchar(as.character(host_about)))
  # plot #
