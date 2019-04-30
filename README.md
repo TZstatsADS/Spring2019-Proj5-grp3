@@ -1,16 +1,14 @@
-# ADS Project 5: 
+# ADS Project 5: Guide to do the best Airbnb listing write up.
 
 Term: Spring 2019
 
-+ Team #
-+ Projec title: Lorem ipsum dolor sit amet
++ Team # 3
++ Project title: Guide to do the best Airbnb listing write up.
 + Team members
-	+ team member 1
-	+ team member 2
-	+ team member 3
-	+ team member 4
-	+ team member 5
-+ Project summary: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+	+ Elena Dubova
+	+ Max Karsok
+	+ Matthew Vitha
++ Project summary: When one wants to become a host, one of the questions to crack is how exactly to describe the property to be successful. In the project our team investigated most and least successful listings from textual analysis perspective. Questions we decided to answer are about differences between the two from linguistic standpoint. We used different types of text mining techniques, including sentiment analysis and topic modeling. Via observing the differences, we created a list of recommendations regarding what does signifies a successful write up and what is likely to signal unsuccessful listing. We didn't go beyond textual analysis and focused on a write up itself. The value of our recommendations is that they do not require any financial investment, but still might positively influence the profile of the host. For analysis we sampled listings from a dataset of ~30,000 observations; we used stratified sample to control for location and price range. To differentiate between successful and unsuccessful listings we used a composite indicator, built from rating score, several popularity measures, and super host indicator.
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
 
