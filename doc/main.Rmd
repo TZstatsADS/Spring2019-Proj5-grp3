@@ -1,0 +1,622 @@
+---
+title: "Airbnb Listing Optimization Analysis"
+author: "Elena Dubova, Max Karsok, Matthew Vitha"
+date: "May 1st, 2019"
+output: html_document
+---
+
+Step 00: Load required libraries.
+
+```{r libraries, echo = FALSE, warning=FALSE, message=FALSE}
+if(!require("dplyr")){
+  install.packages("dplyr")}
+  library(dplyr)
+if(!require("Hmisc")){
+  install.packages("Hmisc")}
+  library(Hmisc)
+#if(!require("qdap")){
+#  install.packages("qdap")}
+#  library(qdap)
+if(!require("magrittr")){
+  install.packages("magrittr")}
+  library(magrittr)
+if(!require("tm")){
+  install.packages("tm")}
+  library(tm)
+if(!require("tidyverse")){
+  install.packages("tidyverse")}
+  library(tidyverse)
+if(!require("tidytext")){
+  install.packages("tidytext")}
+  library(tidytext)
+if(!require("ggplot2")){
+  install.packages("ggplot2")}
+  library(ggplot2)
+if(!require("data.table")){
+  install.packages("data.table")}
+  library(data.table)
+if(!require("wordcloud")){
+  install.packages("wordcloud")}
+  library(wordcloud)
+if(!require("lubridate")){
+  install.packages("lubridate")}
+  library(lubridate)
+if(!require("DT")){
+  install.packages("DT")}
+  library(DT)
+if(!require("stringr")){
+  install.packages("stringr")}
+  library(stringr)
+if(!require("topicmodels")){
+  install.packages("topicmodels")}
+  library(topicmodels)
+if(!require("SnowballC")){
+  install.packages("SnowballC")}
+  library(SnowballC)
+if(!require("classInt")){
+  install.packages("classInt")}
+  library(classInt)
+if(!require("cowplot")){
+  install.packages("cowplot")}
+  library(cowplot)
+if(!require("beeswarm")){
+  install.packages("beeswarm")}
+  library(beeswarm)
+if(!require("rworldmap")){
+  install.packages("rworldmap")}
+  library(rworldmap)
+if(!require("RColorBrewer")){
+  install.packages("RColorBrewer")}
+  library(RColorBrewer)
+```
+
+Step 01: Build functions.
+
+```{r functions}
+words = c("guest", "room", "apartment")
+getCorpus = function(text) {
+  corpus = VCorpus(VectorSource(text)) %>%
+    tm_map(content_transformer(tolower)) %>%
+    tm_map(removePunctuation) %>%
+    tm_map(removeNumbers) %>%
+    tm_map(stripWhitespace) %>%
+    tm_map(removeWords, stopwords("en")) %>%
+    tm_map(removeWords, stopwords("SMART")) %>%
+    tm_map(removeWords, words)
+  return(corpus)
+}
+# this function is written following the tutorial: https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling and course tutorials
+top_terms_by_topic_LDA = function(text, plot = T, number_of_topics = 4) {    
+  corpus = getCorpus(text)
+  DTM = DocumentTermMatrix(corpus) 
+  
+  unique_indexes = unique(DTM$i) 
+  DTM = DTM[unique_indexes,] 
+  
+  lda = LDA(DTM, k = number_of_topics, method = "Gibbs", control = list(iter = 2000,  thin = 400, nstart = 5, best = T, seed = list(1234, 423, 2211, 1122, 3345)))
+  topics = tidy(lda, matrix = "beta")
+  
+  top_terms = topics %>% 
+    group_by(topic) %>% 
+    top_n(10, beta) %>% 
+    ungroup() %>% 
+    arrange(topic, -beta)
+  
+  if(plot == T){
+    top_terms %>% 
+      mutate(term = reorder(term, beta)) %>% 
+      ggplot(aes(term, beta, fill = factor(topic))) + 
+      geom_col(show.legend = FALSE) + 
+      facet_wrap(~ topic, scales = "free") + 
+      labs(x = NULL, y = "Topic concentration (beta)") + 
+      coord_flip()
+  }else{ 
+    return(top_terms)
+  }
+}
+
+
+# this function is written following the tutorial: https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+top_terms_by_topic_tfidf = function(text_df, text_column, group_column, plot = T) {
+  group_column = enquo(group_column)
+  text_column = enquo(text_column)
+  
+  words = text_df %>%
+    unnest_tokens(word, !!text_column) %>%
+    count(!!group_column, word) %>% 
+    ungroup()
+  
+  total_words = words %>% 
+    group_by(!!group_column) %>% 
+    summarize(total = sum(n))
+  
+  words = left_join(words, total_words)
+  
+  tf_idf = words %>%
+    bind_tf_idf(word, !!group_column, n) %>%
+    select(-total) %>%
+    arrange(desc(tf_idf)) %>%
+    mutate(word = factor(word, levels = rev(unique(word))))
+  
+  if(plot == T){
+    group_name <- quo_name(group_column)
+    
+    tf_idf %>% 
+      group_by(!!group_column) %>% 
+      top_n(10) %>% 
+      ungroup %>%
+      ggplot(aes(word, tf_idf, fill = as.factor(group_name))) +
+      geom_col(show.legend = F) +
+      labs(x = NULL, y = "tf-idf") +
+      facet_wrap(reformulate(group_name), scales = "free") +
+      coord_flip()
+  }else{
+    return(tf_idf)
+  }
+}
+```
+
+Step 02: Read data from working directory.
+
+```{r warning=FALSE, message=FALSE}
+data = read.csv("C:/Users/mkarsok/Downloads/analysisData.csv")
+```
+
+Step 03: Exploratory Analysis.
+
+```{r message=FALSE, warning=FALSE}
+hist(data$price, breaks = 100)
+hist(data$reviews_per_month, breaks = 100, xlim = c(0, 10))
+```
+
+Step 04: Setup sampling fields and parameters.
+
+```{r}
+ # create price brackets #
+data$price_bkt <- as.numeric(cut2(data$price, g=4))
+ # re-create buroughs field #
+data$location_bkt <- data$neighbourhood_group_cleansed
+ # create good locations and bad locations based on paramaters #
+polar_data <- data %>%
+          group_by(id) %>%
+          mutate(category = case_when(
+                          review_scores_rating >= 87 &
+                            reviews_per_month  >= 2 &
+                            host_is_superhost  == 't' ~ 'Good',
+                          review_scores_rating <= 87 &
+                            reviews_per_month  <= 0.5 &
+                            host_is_superhost  == 'f' ~ 'Bad')) %>%
+          filter(category %in% c('Good', 'Bad')) %>%
+          filter(location_bkt %in% c('Manhattan', 'Brooklyn')) %>%
+          mutate(strat = case_when(
+                        location_bkt == 'Manhattan' & price_bkt == 1 ~ 1,
+                        location_bkt == 'Manhattan' & price_bkt == 2 ~ 2,
+                        location_bkt == 'Manhattan' & price_bkt == 3 ~ 3,
+                        location_bkt == 'Manhattan' & price_bkt == 4 ~ 4,
+                        location_bkt == 'Brooklyn' & price_bkt == 1 ~ 5,
+                        location_bkt == 'Brooklyn' & price_bkt == 2 ~ 6,
+                        location_bkt == 'Brooklyn' & price_bkt == 3 ~ 7,
+                        location_bkt == 'Brooklyn' & price_bkt == 4 ~ 8))
+ # test #
+table(polar_data$strat, polar_data$category)
+```
+
+Step 05: Calculate the examine the length of the listing variables.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ # calculate the length #
+polar_data = polar_data %>% mutate(total_length = nchar(as.character(description))+nchar(as.character(summary))+nchar(as.character(space))+nchar(as.character(neighborhood_overview))+nchar(as.character(notes))+nchar(as.character(transit))+nchar(as.character(access))+nchar(as.character(interaction))+nchar(as.character(house_rules))+nchar(as.character(host_about)))
+ # plot #
+ ggplot(polar_data, aes(total_length, fill = category)) + geom_histogram() + facet_grid(rows = vars(strat), cols = vars(category))
+
+  # calculate lengths as variables #
+ polar_data_full = polar_data %>% 
+ mutate(description_length = nchar(as.character(description))) %>%
+ mutate(space_length = nchar(as.character(space))) %>%
+ mutate(neighborhood_overview_length = nchar(as.character(neighborhood_overview))) %>%
+ mutate(notes_length = nchar(as.character(notes))) %>%
+ mutate(transit_length = nchar(as.character(transit))) %>%
+ mutate(access_length = nchar(as.character(access))) %>%
+ mutate(interaction_length = nchar(as.character(interaction))) %>%
+ mutate(house_rules_length = nchar(as.character(house_rules))) %>%
+ mutate(host_length = nchar(as.character(host_about)))
+ # plot #
+ ggplot(polar_data_full, aes(host_length, fill = category)) + geom_histogram() +
+   facet_grid(rows = vars(strat), cols = vars(category))
+```
+On average, good listings tend to be longer, but looking by category reveals similar distribution shapes.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+polar_data_full = polar_data_full %>% mutate(num_exclam_interaction = str_count(as.character(interaction), "!"))
+
+ggplot(polar_data_full, aes(num_exclam_interaction, fill = category)) + geom_histogram() + facet_grid(rows = vars(strat), cols = vars(category))
+
+```
+No significant insights, but interaction is more emotionally described in the best listings
+
+Step 06: LDA topic modeling contrasting the two categories. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+polar_data_full_bad = polar_data_full %>% filter(category == "Bad")
+
+polar_data_full_bad_text = paste(unlist(polar_data_full_bad$description), collapse =" ")
+
+top_terms_by_topic_LDA(polar_data_full_bad_text, plot = T, number_of_topics = 4)
+```
+```{r}
+polar_data_full_good = polar_data_full %>% filter(category == "Good")
+
+polar_data_full_good_text = paste(unlist(polar_data_full_good$description), collapse =" ")
+
+top_terms_by_topic_LDA(polar_data_full_good_text, plot = T, number_of_topics = 4)
+```
+***LDA: needs tuning vs # of topics, full text
+```{R}
+ # integrate the topics into the base dataset #
+  corpus_mk = getCorpus(polar_data_full$description)
+  DTM_mk = DocumentTermMatrix(corpus_mk)
+  
+  unique_indexes_mk = unique(DTM_mk$i) 
+  DTM_mk = DTM_mk[unique_indexes_mk,]
+  
+  lda = LDA(DTM_mk, k = 4, method = "Gibbs", control = list(iter = 2000,  thin = 400, nstart = 5, best = T, seed = list(1234, 423, 2211, 1122, 3345)))
+
+topics_words <- tidy(lda, matrix = 'beta')
+topics_docs <- tidy(lda, matrix = 'gamma')
+topics_docs <- topics_docs %>% spread(topic, gamma)
+topics_docs$document <- as.integer(topics_docs$document)
+polar_data_full <- polar_data_full %>% mutate(tag = row_number())
+polar_data_full <- polar_data_full %>% inner_join(topics_docs, by = c('tag' = 'document'))
+common_topic <- as.data.frame(t(apply(polar_data_full[,112:115], 1, function(x) as.numeric(x == max(x)))))
+polar_data_full <- polar_data_full %>% cbind(common_topic)
+
+```
+
+Step 07: TDIDF Analysis of categories.
+
+```{r message=FALSE, warning=FALSE}
+polar_data_full$summary = as.character(
+polar_data_full$summary)
+polar_data_full_summary = polar_data_full%>% select(summary, category)
+
+top_terms_by_topic_tfidf(polar_data_full_summary,summary, category, plot = T)
+```
+this shous pretty interesting insights: non-standard keyboard is a minus, and topics from good are informative (mirror, snacks, etc)
+
+Step 08: Polarity function (we have a missing function somewhere in here)
+
+```{r}
+# MK: I still cannot rrun the polarity functions #
+polar_data_full_summary %>%
+group_by(category) %$% polarity(summary)
+```
+
+```{r}
+polarity_summary  = polar_data_full_summary %>%
+group_by(category) %$% polarity(summary, category)
+polarity_summary
+```
+
+```{r}
+plot(polarity_summary)
+scores(polarity_summary)
+counts(polarity_summary)
+```
+
+Step 09: Sentiment analysis with emotions.
+
+```{r message=FALSE, warning=FALSE}
+get.dtm <- function(text.data, unique.only = F){
+  corpus = VCorpus(VectorSource(text.data))
+  dtm = DocumentTermMatrix(corpus, control = list(
+    tolower = TRUE,
+    removeNumbers = TRUE,#we aren't concerned with informativeness, so few clearning options
+    stopwords = TRUE,
+    removeNumbers = TRUE, 
+    removePunctuation = TRUE,
+    stripWhitespace = TRUE))
+  if (unique.only == T){
+    non_zero_entries = unique(DTM$i) #omits zero entries
+    dtm = dtm[non_zero_entries,]
+  }
+  return(dtm)
+}
+
+good = polar_data_full_summary %>% filter(category == "Good")
+bad = polar_data_full_summary %>% filter(category == "Bad")
+
+
+#tm_map(gt, stemDocument)
+dtm_good <- get.dtm(good$summary)
+dtm_matrix_good = as.matrix(dtm_good)
+dim(dtm_matrix_good)
+
+dtm_bad <- get.dtm(bad$summary)
+dtm_matrix_bad = as.matrix(dtm_bad)
+dim(dtm_matrix_bad)
+
+tidy_format_good = tidy(dtm_good)
+tidy_format_good
+
+tidy_format_bad = tidy(dtm_bad)
+tidy_format_bad
+```
+
+```{r}
+#sentiments dataframe from tidytext package
+lexicon = get_sentiments('afinn')
+lexicon %>% count(score)
+```
+```{r}
+lexicon2 = get_sentiments('nrc')#bing, loughran
+lexicon2_counts = lexicon2 %>% count(sentiment)
+lexicon2_counts
+```
+
+```{r}
+ggplot(lexicon2_counts, aes(sentiment, n)) + geom_col() 
+```
+```{r}
+lexicon3 = get_sentiments('bing')
+tidy_bing_words_good = inner_join(tidy_format_good, lexicon3, by = c("term" = "word"))
+tidy_bing_words_good = tidy_bing_words_good %>% mutate(index = as.numeric(document))
+tidy_bing_words_good
+
+
+tidy_bing_words_bad = inner_join(tidy_format_bad, lexicon3, by = c("term" = "word"))
+tidy_bing_words_bad = tidy_bing_words_bad %>% mutate(index = as.numeric(document))
+tidy_bing_words_bad
+
+```
+```{r}
+tidy_bing_words_good_count = tidy_bing_words_good %>%count(sentiment, index)
+tidy_bing_words_good_count
+
+tidy_bing_words_bad_count = tidy_bing_words_bad %>%count(sentiment, index)
+tidy_bing_words_bad_count
+```
+```{r}
+tidy_bing_words_good_spread = tidy_bing_words_good_count %>% spread(sentiment, n, fill = 0)
+tidy_bing_words_good_spread
+
+tidy_bing_words_bad_spread = tidy_bing_words_bad_count %>% spread(sentiment, n, fill = 0)
+tidy_bing_words_bad_spread
+```
+Results are skewed more positvely so difficult to infer.
+
+```{r}
+data(sentiments)
+afinn = subset(sentiments, sentiments$lexicon == "AFINN") #one scientist labeling
+head(afinn)
+```
+```{r}
+nrc = subset(sentiments, sentiments$lexicon == 'nrc')
+head(nrc,30)
+```
+
+
+```{r}
+affin_join_good = inner_join(tidy_format_good, afinn, by = c("term" = "word"))
+affin_join_good[1:10,]
+
+affin_join_bad = inner_join(tidy_format_bad, afinn, by = c("term" = "word"))
+affin_join_bad[1:10,]
+
+affin_join_good = affin_join_good %>% mutate(category = "good")
+affin_join_bad = affin_join_bad %>% mutate(category = "bad")
+
+affin_join = rbind(affin_join_good, affin_join_bad)
+
+```
+```{r}
+grouped_affin = affin_join %>% 
+  group_by(category, document) %>%
+  summarize(total_score  = sum(score)) %>%
+  arrange(total_score)
+```
+```{r}
+ggplot(grouped_affin, aes(document, total_score, col = category)) + geom_point()
+```
+Distribution is normal.
+
+
+```{r}
+plutchik_good = tidy_format_good %>% 
+  inner_join(nrc, by = c("term" = "word")) %>% 
+  filter(!sentiment %in% c("positive", "negative")) %>%
+  group_by(sentiment) %>%
+  summarize(total_count = sum(count))
+
+ggplot(plutchik_good, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
+```
+
+```{r}
+plutchik_bad = tidy_format_bad %>% 
+  inner_join(nrc, by = c("term" = "word")) %>% 
+  filter(!sentiment %in% c("positive", "negative")) %>%
+  group_by(sentiment) %>%
+  summarize(total_count = sum(count))
+
+ggplot(plutchik_bad, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
+```
+#no insights
+
+#redo as I added host since
+```{r message=FALSE, warning=FALSE}
+good = polar_data %>% filter(category == "Good")
+bad = polar_data %>% filter(category == "Bad")
+
+dtm_good <- get.dtm(good$summary)
+dtm_matrix_good = as.matrix(dtm_good)
+dim(dtm_matrix_good)
+
+dtm_bad <- get.dtm(bad$summary)
+dtm_matrix_bad = as.matrix(dtm_bad)
+dim(dtm_matrix_bad)
+
+tidy_format_good = tidy(dtm_good)
+tidy_format_good
+
+tidy_format_bad = tidy(dtm_bad)
+tidy_format_bad
+
+
+
+plutchik2_good = tidy_format_good %>% 
+  inner_join(nrc, by = c("term" = "word")) %>% 
+  filter(!sentiment %in% c("positive", "negative")) %>%
+  group_by(sentiment) #%>%
+  #mutate(host_since = inner_join(test_df$host_since, by = "document"))
+plutchik2_good$document = as.numeric(plutchik2_good$document)
+date_plutchik2_good = inner_join(plutchik2_good,good, by = "document") %>%
+  group_by(document,host_since, sentiment) %>%
+  summarize(total_count = sum(count))
+  
+  
+  
+ggplot(date_plutchik2_good, aes(date(host_since), total_count)) + geom_smooth() + facet_wrap(~sentiment) 
+
+```
+
+```{r message=FALSE, warning=FALSE}
+test_df = data %>% select(id, summary, price, review_scores_rating, host_since) %>% head(200)
+test_df <- cbind(document = as.numeric(rownames(test_df)), test_df)
+plutchik2 = tidy_format_good %>% 
+  inner_join(nrc, by = c("term" = "word")) %>% 
+  filter(!sentiment %in% c("positive", "negative")) %>%
+  group_by(sentiment) #%>%
+  #mutate(host_since = inner_join(test_df$host_since, by = "document"))
+plutchik2$document = as.numeric(plutchik2$document)
+date_plutchik2 = inner_join(plutchik2,test_df, by = "document") %>%
+  group_by(document,host_since, sentiment) %>%
+  summarize(total_count = sum(count))
+  
+  
+  
+ggplot(date_plutchik2, aes(date(host_since), total_count)) + geom_smooth() + facet_wrap(~sentiment) 
+
+```
+Not sure how valuable this is as it is not really timeseries, just the date the host started on airbnb...
+
+```{r message=FALSE, warning=FALSE}
+test_df = data %>% select(id, summary, price, review_scores_rating, host_since) %>% head(200)
+test_df <- cbind(document = as.numeric(rownames(test_df)), test_df)
+plutchik2 = tidy_format_bad %>% 
+  inner_join(nrc, by = c("term" = "word")) %>% 
+  filter(!sentiment %in% c("positive", "negative")) %>%
+  group_by(sentiment) #%>%
+  #mutate(host_since = inner_join(test_df$host_since, by = "document"))
+plutchik2$document = as.numeric(plutchik2$document)
+date_plutchik2 = inner_join(plutchik2,test_df, by = "document") %>%
+  group_by(document,host_since, sentiment) %>%
+  summarize(total_count = sum(count))
+  
+  
+  
+ggplot(date_plutchik2, aes(date(host_since), total_count)) + geom_smooth() + facet_wrap(~sentiment) 
+
+```
+smth might be interesting about those trends. Maybe the anticipation slot because it is a more popular emotion in the BAD category.
+
+
+```{r}
+#good
+bind_pos_neg_polarity  = tidy_format_good %>%
+  inner_join(lexicon3, by = c("term" = "word")) %>%
+  count(document, term, sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(polarity = positive - negative)
+  
+  bing_polarity_doc  = bind_pos_neg_polarity %>%
+  group_by(document) %>%
+  summarize(summary_polarity = sum(polarity)) %>%
+  arrange(summary_polarity)
+hist(bing_polarity_doc$summary_polarity)
+
+```
+```{r}
+#good
+bind_pos_neg_polarity = bind_pos_neg_polarity%>% 
+  mutate(positive_negative = ifelse(polarity > 0, "positive", "negative"))
+
+ggplot(bind_pos_neg_polarity, aes(reorder(term, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Airbnb Summaries Polarity")  +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2))
+
+```
+
+```{r}
+#good
+pol_subsections = function(df){
+  x.pos = subset(df$text, df$polarity > 0)
+  x.neg = subset(df$text, df$polarity < 0)
+  x.pos = paste(x.pos, collapse = " ")
+  x.neg = paste(x.neg, collapse = " ")
+  all.terms = c(x.pos, x.neg)
+  return(all.terms)
+  
+}
+
+text_polarity = counts(polarity_summary) 
+text_polarity = text_polarity %>% select( id  = id, polarity = polarity,text = text.var)
+all_terms = pol_subsections(text_polarity) 
+
+all_corpus = all_terms %>% VectorSource() %>% VCorpus()
+
+all_tdm = TermDocumentMatrix(all_corpus, control = list(removePunctuation = TRUE, stopwords = stopwords(kind = "en"))) %>%
+  as.matrix() %>%
+  set_colnames(c('positive', 'negative'))
+#smth wrong here
+comparison.cloud(all_tdm, max.words = 70, scale=c(2,.05), colors = c("darkgreen", "darkred"))
+class(all_tdm)
+```
+
+```{r}
+#bad
+bind_pos_neg_polarity  = tidy_format_bad %>%
+  inner_join(lexicon3, by = c("term" = "word")) %>%
+  count(document, term, sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(polarity = positive - negative)
+  
+  bing_polarity_doc  = bind_pos_neg_polarity %>%
+  group_by(document) %>%
+  summarize(summary_polarity = sum(polarity)) %>%
+  arrange(summary_polarity)
+hist(bing_polarity_doc$summary_polarity)
+
+```
+
+```{r}
+#bad
+bind_pos_neg_polarity = bind_pos_neg_polarity%>% 
+  mutate(positive_negative = ifelse(polarity > 0, "positive", "negative"))
+
+ggplot(bind_pos_neg_polarity, aes(reorder(term, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Airbnb Summaries Polarity")  +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2))
+
+```
+
+```{r}
+#bad
+pol_subsections = function(df){
+  x.pos = subset(df$text, df$polarity > 0)
+  x.neg = subset(df$text, df$polarity < 0)
+  x.pos = paste(x.pos, collapse = " ")
+  x.neg = paste(x.neg, collapse = " ")
+  all.terms = c(x.pos, x.neg)
+  return(all.terms)
+  
+}
+
+text_polarity = counts(polarity_summary) 
+text_polarity = text_polarity %>% select( id  = id, polarity = polarity,text = text.var)
+all_terms = pol_subsections(text_polarity) 
+
+all_corpus = all_terms %>% VectorSource() %>% VCorpus()
+
+all_tdm = TermDocumentMatrix(all_corpus, control = list(removePunctuation = TRUE, stopwords = stopwords(kind = "en"))) %>%
+  as.matrix() %>%
+  set_colnames(c('positive', 'negative'))
+#smth wrong here
+comparison.cloud(all_tdm, max.words = 70, scale=c(2,.05), colors = c("darkgreen", "darkred"))
+
+```
+
