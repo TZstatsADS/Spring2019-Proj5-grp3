@@ -78,7 +78,7 @@ source('../lib/lda.R')
 
 # Step 2: Read data from working directory.
 
-The original data file is approximately 28 MB in compressed state, therefore we download data locally and read it from directory rather than reading it from the “data” folder. Link to download zip file in located in the README.md file in the data folder of the repository. Alternatively, one can skip **Step 2** and **Step 3** and proceed with cleaned and transformed dataset from **Step 4**.
+The original data file is approximately 28 MB in compressed state; therefore we download data locally and read it from directory rather than reading it from the “data” folder. Link to download zip file in located in the README.md file in the data folder of the repository. Alternatively, one can skip **Step 2** and **Step 3** and proceed with cleaned and transformed dataset from **Step 4**.
 
 ```{r warning=FALSE, message=FALSE}
 
@@ -90,11 +90,24 @@ data = read.csv(path, header = TRUE)
 
 # Step 3: Feature generation, data selection.
 
-As we are specifically interested in understanding of what makes a successful and unsucessful listing write up, it is not very efficient to look at all 29,142 observations from the dataset. To extract useful insights, we decided to get rid of listings with "average performance" and come up with two polar samples that present "the best" and "the worst" listings (further defined as "Good" and "Bad"). To measure "goodness" of the listing we created a composite indicator that takes into account score ratings, two measures of popularity (overall number of reviews and number of last month's reviews), and "super host indicator". To reduce bias in the sample, we controlled for location (simultaneously limiting it to most popular options) and price bucket.
+As we are specifically interested in understanding of what makes a successful and unsuccessful listing write up, it is not very efficient to look at all 29,142 observations from the dataset. To extract useful insights, we decided to get rid of listings with "average performance" and come up with two polar samples that present "the best" and "the worst" listings (further defined as "Good" and "Bad"). To measure "goodness" of the listing we created a composite indicator that considers score ratings, two measures of popularity (overall number of reviews and number of last month's reviews), and "super host indicator". To reduce bias in the sample, we controlled for location (simultaneously limiting it to most popular options) and price bucket.
 
 ```{r message=FALSE, warning=FALSE}
-hist(data$price, breaks = 100)
-hist(data$reviews_per_month, breaks = 100, xlim = c(0, 10))
+#EDA needes to obtain stratified sample
+hist(data$price, breaks = 100) #distribution of prices help to determine price buckets
+```
+From this right-skewed disctribution it is interesting to observe that long tail of very expensive apartments.
+```{r}
+hist(data$reviews_per_month, breaks = 100, xlim = c(0, 10)) #distribution of reviews per month helps set threshold for this indicator
+```
+This is another right-skewed distribution; Number of Rewies per month above two can be considered as substantially above average, so we choose it as an upper threshold. 
+
+```{r}
+plot(data$neighbourhood_group_cleansed) # Brooklyn and Manhattan are reasonable choices to limit to when placing controls over location. 
+```
+Based on distribution above and intention to control for location and price bucket, we construct the sample to analyse below.
+
+```{r message=FALSE, warning=FALSE}
 
  # create price brackets #
 data$price_bkt <- as.numeric(cut2(data$price, g=4))
@@ -113,7 +126,7 @@ polar_data <- data %>%
           filter(category %in% c('Good', 'Bad')) %>%
           filter(location_bkt %in% c('Manhattan', 'Brooklyn')) %>%
           mutate(strat = case_when(
-                        location_bkt == 'Manhattan' & price_bkt == 1 ~ 1,
+                        location_bkt == 'Manhattan' & price_bkt == 1 ~ 1,#1 is cheapest 4 is most expensive
                         location_bkt == 'Manhattan' & price_bkt == 2 ~ 2,
                         location_bkt == 'Manhattan' & price_bkt == 3 ~ 3,
                         location_bkt == 'Manhattan' & price_bkt == 4 ~ 4,
@@ -121,22 +134,44 @@ polar_data <- data %>%
                         location_bkt == 'Brooklyn' & price_bkt == 2 ~ 6,
                         location_bkt == 'Brooklyn' & price_bkt == 3 ~ 7,
                         location_bkt == 'Brooklyn' & price_bkt == 4 ~ 8))
- # test #
+
+save(polar_data, file = "../output/stratified_sample.Rdata")
+
+ # stratification outline #
 table(polar_data$strat, polar_data$category)
 ```
 
+# Step 4: Alalysis. 
 
+```{r}
 
-Step 05: Calculate the examine the length of the listing variables.
+load("../output/stratified_sample.Rdata") #polar_data
+
+```
+
+## 4.1 Length of the textual variables.
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 
-
- # calculate the length #
+# calculate the length 
 polar_data = polar_data %>% mutate(total_length = nchar(as.character(description))+nchar(as.character(summary))+nchar(as.character(space))+nchar(as.character(neighborhood_overview))+nchar(as.character(notes))+nchar(as.character(transit))+nchar(as.character(access))+nchar(as.character(interaction))+nchar(as.character(house_rules))+nchar(as.character(host_about)))
  # plot #
- ggplot(polar_data, aes(total_length, fill = category)) + geom_histogram() + facet_grid(rows = vars(strat), cols = vars(category))
+ ggplot(polar_data, aes(total_length, fill = category)) + geom_histogram() + facet_grid(rows = vars(strat), cols = vars(category)) + ggtitle("Total Lengths of  Listings in Good and Bad Category") + theme(axis.text.x = element_text(size=8),axis.text.y = element_text(size=5))
+ 
+```
 
+On average, successful listings are longer and it is consistent throughout 8 strata of sample. To be more precise, we can compare means.
+
+```{r}
+
+polar_data %>%
+  select(id, category, total_length) %>%
+  group_by(category) %>%
+  summarise(mean = mean(total_length))
+
+```
+So, first free tip for a new host is to invest energy to write more text to describe the apartment. 
+```{r}
   # calculate lengths as variables #
  polar_data_full = polar_data %>% 
  mutate(description_length = nchar(as.character(description))) %>%
@@ -148,8 +183,9 @@ polar_data = polar_data %>% mutate(total_length = nchar(as.character(description
  mutate(interaction_length = nchar(as.character(interaction))) %>%
  mutate(house_rules_length = nchar(as.character(house_rules))) %>%
  mutate(host_length = nchar(as.character(host_about)))
+
  # plot #
- ggplot(polar_data_full, aes(host_length, fill = category)) + geom_histogram() +
+ ggplot(polar_data_full, aes(description_length, fill = category)) + geom_histogram() +
    facet_grid(rows = vars(strat), cols = vars(category))
 ```
 On average, good listings tend to be longer, but looking by category reveals similar distribution shapes.
