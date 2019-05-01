@@ -9,7 +9,7 @@ top_terms_by_topic_tfidf = function(text_df, text_column, group_column, plot = T
   
   total_words = words %>% 
     group_by(!!group_column) %>% 
-    summarize(total = sum(n))
+    summarise(total = sum(n))
   
   words = left_join(words, total_words)
   
@@ -35,3 +35,5 @@ top_terms_by_topic_tfidf = function(text_df, text_column, group_column, plot = T
     return(tf_idf)
   }
 }
+
+#summarise(mean = mean(total_length))

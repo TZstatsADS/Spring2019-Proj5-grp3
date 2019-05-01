@@ -230,7 +230,7 @@ polar_data_full = polar_data_full %>%
 
 ggplot(polar_data_full, aes(num_exclam_interaction, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank()) + scale_x_log10() + ggtitle("A Quick Note about Exclamation Marks")
 
-ggsave("../figs/density_exclamation_marks.png")
+#ggsave("../figs/density_exclamation_marks.png")
 
 ```
 
@@ -306,39 +306,44 @@ Here, summary fo the topics may be the following: (1) combination on space, floo
 
 "Bathroom" is a leading word for a "good topic", mentioning "kitchen" is controversial. 
 
-
 ```{r}
-#!!! MAX, I didnt touch it, please, decive what you want to do with it 
+#!!! MAX, I didnt touch it, please, decive what you want to do with it. renamed the df as it interferes with further flow
  # integrate the topics into the base dataset #
-  corpus_mk = getCorpus(polar_data_full$full_text)
-  DTM_mk = DocumentTermMatrix(corpus_mk)
+  #corpus_mk = getCorpus(polar_data_full$full_text)
+  #DTM_mk = DocumentTermMatrix(corpus_mk)
   
-  unique_indexes_mk = unique(DTM_mk$i) 
-  DTM_mk = DTM_mk[unique_indexes_mk,]
+  #unique_indexes_mk = unique(DTM_mk$i) 
+  #DTM_mk = DTM_mk[unique_indexes_mk,]
   
-  lda = LDA(DTM_mk, k = 4, method = "Gibbs", control = list(iter = 2000,  thin = 400, nstart = 5, best = T, seed = list(1234, 423, 2211, 1122, 3345)))
+  #lda = LDA(DTM_mk, k = 4, method = "Gibbs", control = list(iter = 2000,  thin = 400, nstart = 5, best = T, seed = list(1234, 423, 2211, #1122, 3345)))
 
-topics_words <- tidy(lda, matrix = 'beta')
-topics_docs <- tidy(lda, matrix = 'gamma')
-topics_docs <- topics_docs %>% spread(topic, gamma)
-topics_docs$document <- as.integer(topics_docs$document)
-polar_data_full <- polar_data_full %>% mutate(tag = row_number())
-polar_data_full <- polar_data_full %>% inner_join(topics_docs, by = c('tag' = 'document'))
-common_topic <- as.data.frame(t(apply(polar_data_full[,112:115], 1, function(x) as.numeric(x == max(x)))))
-polar_data_full <- polar_data_full %>% cbind(common_topic)
+#topics_words <- tidy(lda, matrix = 'beta')
+##topics_docs <- tidy(lda, matrix = 'gamma')
+#topics_docs <- topics_docs %>% spread(topic, gamma)
+#topics_docs$document <- as.integer(topics_docs$document)
+#polar_data_full_1 <- polar_data_full %>% mutate(tag = row_number())
+#polar_data_full_1 <- polar_data_full_1 %>% inner_join(topics_docs, by = c('tag' = 'document'))
+#common_topic <- as.data.frame(t(apply(polar_data_full_1[,112:115], 1, function(x) as.numeric(x == max(x)))))
+#polar_data_full_1 <- polar_data_full_1 %>% cbind(common_topic)
 
 ```
 
-Step 07: TDIDF Analysis of categories.
+## 4.2 TD_IDF Analysis of Categories.
+
+Analysis is performed on 'summary' data.
 
 ```{r message=FALSE, warning=FALSE}
 polar_data_full$summary = as.character(
 polar_data_full$summary)
 polar_data_full_summary = polar_data_full%>% select(summary, category)
 
-top_terms_by_topic_tfidf(polar_data_full_summary,summary, category, plot = T)
+top_terms_by_topic_tfidf(polar_data_full_summary, summary, category, plot = T)
+
+ggsave("../figs/td_idf_good_summary.png")
+
 ```
-this shous pretty interesting insights: non-standard keyboard is a minus, and topics from good are informative (mirror, snacks, etc)
+Next tip from term frequency/inverse document frequency analysis: for a successful write up use standard keyboard, practice proper English language, mention social clues (such as membership and charity) and fancy notions (such as "manor" instead of, say, "house"). 
+
 
 Step 08: Polarity function (we have a missing function somewhere in here)
 
