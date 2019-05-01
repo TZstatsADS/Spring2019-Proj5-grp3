@@ -449,7 +449,7 @@ plot_grid(polarity_plot_bad, polarity_plot_good)
 
 ```
 
-Per document view help to cofidently conclude that it is no the sweetness of message that characterises a successful write up, and the assumption that successful listings are puraly more positive is wrong. It is not the polarity of emotion, but amount of emotion drives success.
+Per document view helps to confidently conclude that it is no the sweetness of message that characterizes a successful write up, and the assumption that successful listings are purely more positive is wrong. It is not the polarity of emotion but amount of emotion drives success.
 
 # Conclusion.
 
