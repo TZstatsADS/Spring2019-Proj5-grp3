@@ -69,6 +69,15 @@ if(!require("rworldmap")){
 if(!require("RColorBrewer")){
   install.packages("RColorBrewer")}
   library(RColorBrewer)
+if(!require("cowplot")){
+  install.packages("cowplot")}
+  library(cowplot)
+if(!require("ldatuning")){
+  install.packages("ldatuning")}
+  library(ldatuning)
+if(!require("SnowballC")){
+  install.packages("SnowballC")}
+  library(SnowballC)
 
 
 source('../lib/tf_idf.R')
@@ -158,6 +167,8 @@ polar_data = polar_data %>% mutate(total_length = nchar(as.character(description
  # plot #
  ggplot(polar_data, aes(total_length, fill = category)) + geom_histogram() + facet_grid(rows = vars(strat), cols = vars(category)) + ggtitle("Total Lengths of  Listings in Good and Bad Category") + theme(axis.text.x = element_text(size=8),axis.text.y = element_text(size=5))
  
+ #ggsave("../figs/total_length_category.png")
+ 
 ```
 
 On average, successful listings are longer and it is consistent throughout 8 strata of sample. To be more precise, we can compare means.
@@ -171,53 +182,135 @@ polar_data %>%
 
 ```
 So, first free tip for a new host is to invest energy to write more text to describe the apartment. 
+
+
 ```{r}
-  # calculate lengths as variables #
+  # calculate lengths as variables
  polar_data_full = polar_data %>% 
  mutate(description_length = nchar(as.character(description))) %>%
  mutate(space_length = nchar(as.character(space))) %>%
  mutate(neighborhood_overview_length = nchar(as.character(neighborhood_overview))) %>%
- mutate(notes_length = nchar(as.character(notes))) %>%
  mutate(transit_length = nchar(as.character(transit))) %>%
  mutate(access_length = nchar(as.character(access))) %>%
  mutate(interaction_length = nchar(as.character(interaction))) %>%
  mutate(house_rules_length = nchar(as.character(house_rules))) %>%
  mutate(host_length = nchar(as.character(host_about)))
 
- # plot #
- ggplot(polar_data_full, aes(description_length, fill = category)) + geom_histogram() +
-   facet_grid(rows = vars(strat), cols = vars(category))
+ # plot
+
+plt1 = ggplot(polar_data_full, aes(description_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(),axis.title.x= element_blank(), legend.position = "none")
+plt2 = ggplot(polar_data_full, aes(space_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(),axis.title.x= element_blank(),axis.title.y= element_blank(), legend.position = "none")
+plt3 = ggplot(polar_data_full, aes(neighborhood_overview_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(), axis.title.x= element_blank(),axis.title.y= element_blank(),legend.position = "none")
+plt4 = ggplot(polar_data_full, aes(transit_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(), axis.title.x= element_blank(),legend.position = "none")
+plt5 = ggplot(polar_data_full, aes(access_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(), axis.title.x= element_blank(),axis.title.y= element_blank(),legend.position = "none")
+plt6 = ggplot(polar_data_full, aes(interaction_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(), axis.title.x= element_blank(),axis.title.y= element_blank(),legend.position = "none")
+plt7 = ggplot(polar_data_full, aes(house_rules_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.ticks = element_blank(),axis.title.x= element_blank(), legend.position = "none")
+plt8 = ggplot(polar_data_full, aes(host_length, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(),axis.title.x= element_blank(), axis.title.y= element_blank(),axis.ticks = element_blank())
+
+
+plot_grid(plt1, plt2, plt3, plt4, plt5, plt6, plt7, plt8, labels = c("Description", "Space", "Neighbourhood", "Transit", "Access", "Interaction", "Rules", "Host"), label_size = 8, label_x = 0.4, scale = 1.1)
+#ggsave("../figs/density_length_category.png")
+ 
 ```
-On average, good listings tend to be longer, but looking by category reveals similar distribution shapes.
+Observing how much "good" and "bad" hosts write about their listings, we observe same the general trend: successful hosts are more loquacious. It seems that unseccessful hosts underutilise the opportunity to describe their apartment, especially when it comes to - most probably optional - "space", "neighborhood", "transit", "access", "interaction" and "rules" categories. Interestingly, both "good" and "bad" hosts often ignore description of themselves, where we observe very similar disctribution shapes. Another interesting observation is about mandatory field "description": variance is pretty low for "good" listings, especially, comparing to high variance of "bad" listings.
+```{r}
+
+ggplot(polar_data_full, aes(category, description_length, fill = category)) + geom_boxplot() 
+#ggsave("../figs/description_length_boxplot.png")
+
+```
+
+The boxplot provides clear guidance on how to approach this particular mandatory category: to be successful one should make an effort to write 1000 words. 
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
-polar_data_full = polar_data_full %>% mutate(num_exclam_interaction = str_count(as.character(interaction), "!"))
 
-ggplot(polar_data_full, aes(num_exclam_interaction, fill = category)) + geom_histogram() + facet_grid(rows = vars(strat), cols = vars(category))
+polar_data_full = polar_data_full %>% 
+  mutate(full_text = paste(as.character(description), as.character(summary),as.character(space), as.character(neighborhood_overview),as.character(notes),as.character(transit),as.character(access),as.character(interaction),as.character(house_rules),as.character(host_about)))%>% 
+  mutate(num_exclam_interaction = str_count(full_text, "!"))
+
+ggplot(polar_data_full, aes(num_exclam_interaction, fill = category)) + geom_density(alpha = 0.3) + theme(axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank()) + scale_x_log10() + ggtitle("A Quick Note about Exclamation Marks")
+
+ggsave("../figs/density_exclamation_marks.png")
 
 ```
-No significant insights, but interaction is more emotionally described in the best listings
 
-Step 06: LDA topic modeling contrasting the two categories. 
+We observe slightly higher tendency to add emotion to the listing utilizing most straightforward tool - exclamation marks in the cohort of "good" hosts. However, the difference between groups is insignificant. So, there is no evidence that exclamation marks signal successful or unsuccessful listing. So, not tip here other than keeping it reasonable. 
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+## 4.2 LDA topic modeling contrasting the two categories.
+
+It is interesting to what extent narrative differs for successful and unsucessful listings. We have to treat "good" and "bad" listings separately as we compose a document-term matrix and derive insightful topics. 
+
+First, we look into topics of rather unsuccessful narratives.
+
+```{r}
 polar_data_full_bad = polar_data_full %>% filter(category == "Bad")
 
-polar_data_full_bad_text = paste(unlist(polar_data_full_bad$description), collapse =" ")
-
-top_terms_by_topic_LDA(polar_data_full_bad_text, plot = T, number_of_topics = 4)
+polar_data_full_bad_text = paste(unlist(polar_data_full_bad$full_text), collapse =" ")
 ```
+
+```{r}
+
+corpus_bad = getCorpus(polar_data_full_bad_text)
+tm_map(corpus_bad, stemDocument)
+dtm_bad = DocumentTermMatrix(corpus_bad)
+stat_best_bad = FindTopicsNumber(dtm_bad, topics = seq(from = 2, to = 15, by = 1),metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"), method = "Gibbs", control = list(seed = 2019), mc.cores = 2L, verbose = TRUE)
+
+save(stat_best_bad, file = "../output/LDA_topic_number_bad.Rdata")
+
+FindTopicsNumber_plot(stat_best_bad)
+#ggsave("../figs/best_number_topics_bad.png")
+```
+
+For "bad" listings optimal number of topics is 3. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+top_terms_by_topic_LDA(polar_data_full_bad_text, plot = T, number_of_topics = 3)
+#ggsave("../figs/lda_bad.png")
+
+```
+With a share of speculation, we can summarize least favorable topics: (1) featuring Williamsburg, Brooklyn with emphasis on size of apartment, proximity to the station, restaurants and coffeshops; (2) featuring Manhattan, with emphasis on kitchen and proximity to the city and the park (indeed, last popular thing on Manhattan is to cook); (3) walking distance to bars and shops also does not signal a successful description.
+
+Now, we do the same exercise for "good" listings.
 ```{r}
 polar_data_full_good = polar_data_full %>% filter(category == "Good")
 
-polar_data_full_good_text = paste(unlist(polar_data_full_good$description), collapse =" ")
-
-top_terms_by_topic_LDA(polar_data_full_good_text, plot = T, number_of_topics = 4)
+polar_data_full_good_text = paste(unlist(polar_data_full_good$full_text), collapse =" ")
 ```
-***LDA: needs tuning vs # of topics, full text
-```{R}
+
+```{r}
+ 
+corpus_good = getCorpus(polar_data_full_good_text)
+tm_map(corpus_good, stemDocument)
+dtm_good = DocumentTermMatrix(corpus_good)
+stat_best_good = FindTopicsNumber(dtm_good, topics = seq(from = 2, to = 15, by = 1),metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"), method = "Gibbs", control = list(seed = 2019), mc.cores = 2L, verbose = TRUE)
+
+save(stat_best_good, file = "../output/LDA_topic_number_good.Rdata")
+
+FindTopicsNumber_plot(stat_best_good)
+#ggsave("../figs/best_number_topics_good.png")
+```
+For "good" listings optimal number of topics is also 3. General behavior of the graphs is similar. It just can be noted that Griffiths's method proposes higher topic variability for "good" hosts. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+top_terms_by_topic_LDA(polar_data_full_good_text, plot = T, number_of_topics = 3)
+#ggsave("../figs/lda_good.png")
+
+```
+
+Here, summary fo the topics may be the following: (1) combination on space, floor and convinient logistics; (2) apartment for family with storage space, featuring modern look and bathroom; (3) a fusion from "bad" scenarios: Manhattan and Brooklyn neighborhoods, restaurants and kitchen, as well as logistical benefits. Especially in he last topic, there is a noticable overlap between narratives from "good" and "bad" listings. We paid attention to several distinct features found only in "good" lsitings: 
+* reference to how guests "feel";
+* reference to "family"
+* openness to "questions".
+
+"Bathroom" is a leading word for a "good topic", mentioning "kitchen" is controversial. 
+
+
+```{r}
+#!!! MAX, I didnt touch it, please, decive what you want to do with it 
  # integrate the topics into the base dataset #
-  corpus_mk = getCorpus(polar_data_full$description)
+  corpus_mk = getCorpus(polar_data_full$full_text)
   DTM_mk = DocumentTermMatrix(corpus_mk)
   
   unique_indexes_mk = unique(DTM_mk$i) 
