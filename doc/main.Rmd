@@ -307,21 +307,37 @@ Here, summary fo the topics may be the following: (1) combination on space, floo
 
 "Bathroom" is a leading word for a "good topic", mentioning "kitchen" is controversial. 
 
-## 4.3 TD_IDF Analysis of Categories.
+## 4.3 TF_IDF Analysis of Categories.
 
 Analysis is performed on 'summary' data.
 
 ```{r message=FALSE, warning=FALSE}
 polar_data_full$summary = as.character(
 polar_data_full$summary)
+Encoding(polar_data_full$summary)  <- "UTF-8"
 polar_data_full_summary = polar_data_full%>% select(summary, category)
 
 top_terms_by_topic_tfidf(polar_data_full_summary, summary, category, plot = T)
 
-ggsave("../figs/td_idf_good_summary.png")
+#ggsave("../figs/tf_idf_summary.png")
 
 ```
-Next tip from term frequency/inverse document frequency analysis: for a successful write up use standard keyboard, practice proper English language, mention social clues (such as membership and charity) and fancy notions (such as "manor" instead of, say, "house"). 
+Next tip from term frequency/inverse document frequency analysis: for a successful write up use standard keyboard, English language, mention social clues (such as membership and charity) and fancy notions (such as "manor" instead of, say, "house"). 
+
+This is the same technique that takes the whole textual data per listing as an input. As a note, it is obvious that some of Chinese characters that should be cleaned as they carry no useful information, such as a dot at the end of the sentence (#1 position for "good" listing), and meaningful entries should be translated into English. We did not do that due to lack of time dedicated to this project.  
+
+```{r message=FALSE, warning=FALSE}
+
+Encoding(polar_data_full$full_text)  <- "UTF-8"
+
+polar_data_full_text = polar_data_full%>% select(full_text, category)
+
+top_terms_by_topic_tfidf(polar_data_full_text, full_text, category, plot = T)
+
+#ggsave("../figs/tf_idf_full_text.png")
+
+```
+Several observations here. English language recommendation is generally reinforced. Female names (lenora, kimberly) characterize "good" listings, male name (artem) is in the top influencing words for "bad" listings. 
 
 ## 4.4 Sentiment Analysis.
 
@@ -440,9 +456,10 @@ Most people think that business improvement come with additional financial inves
 3. Do not rely on exclamation marks to drive attention, this is not what best hosts do to differentiate.
 4. If you want to skip a category, skip "about host category".
 5. Make it person openness to "questions".
-6. Use proper English and standard keyboard.
-7. Mention social clues (such as membership and charity) and fancy notions (such as "manor" instead of "house")
-8. Add emotion by adding more textual description, not by short and excessively "sweet"" messages.
+6. Use English and standard keyboard.
+7. If there is such an opportunity, use female names as host names.
+8. Mention social clues (such as membership and charity) and fancy notions (such as "manor" instead of "house")
+9. Add emotion by adding more textual description, not by short and excessively "sweet"" messages.
 
 __________
 
