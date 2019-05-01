@@ -82,6 +82,7 @@ if(!require("SnowballC")){
 
 source('../lib/tf_idf.R')
 source('../lib/lda.R')
+source("../lib/get_dtm.R")
 
 ```
 
@@ -350,14 +351,11 @@ Finally, it is useful to look into how successful and unsuccessful hosts use sen
 
 
 ```{r}
-source("../lib/get_dtm.R")
 
 dtm_good <- get.dtm(polar_data_full_good$full_text)
 dtm_matrix_good = as.matrix(dtm_good)
 dim(dtm_matrix_good)
-
 tidy_format_good = tidy(dtm_good)
-head(tidy_format_good)
 
 ```
 ```{r}
@@ -366,100 +364,17 @@ dtm_matrix_bad = as.matrix(dtm_bad)
 dim(dtm_matrix_bad)
 
 tidy_format_bad = tidy(dtm_bad)
-head(tidy_format_bad)
 ```
+It is important to mention that sample size is similar, as sentiment analysis is based on counts. Amount of "bad" listings in analysis even slighly bigger.
 
-```{r}
-#sentiments dataframe from tidytext package
-lexicon = get_sentiments('afinn')
-lexicon2 = get_sentiments('nrc')
-lexicon3 = get_sentiments('bing')
-```
-
-```{r}
-lexicon3 = get_sentiments('bing')
-tidy_bing_words_good = inner_join(tidy_format_good, lexicon3, by = c("term" = "word"))
-tidy_bing_words_good = tidy_bing_words_good %>% mutate(index = as.numeric(document))
-tidy_bing_words_good
-
-
-tidy_bing_words_bad = inner_join(tidy_format_bad, lexicon3, by = c("term" = "word"))
-tidy_bing_words_bad = tidy_bing_words_bad %>% mutate(index = as.numeric(document))
-tidy_bing_words_bad
-
-```
-
-```{r}
-tidy_bing_words_good_count = tidy_bing_words_good %>%count(sentiment, index)
-tidy_bing_words_good_count
-
-tidy_bing_words_bad_count = tidy_bing_words_bad %>%count(sentiment, index)
-tidy_bing_words_bad_count
-```
-```{r}
-tidy_bing_words_good_spread = tidy_bing_words_good_count %>% spread(sentiment, n, fill = 0)
-tidy_bing_words_good_spread
-
-tidy_bing_words_bad_spread = tidy_bing_words_bad_count %>% spread(sentiment, n, fill = 0)
-tidy_bing_words_bad_spread
-```
-
+We considered nrc classification for sentiment analysis. 
 
 ```{r}
 data(sentiments)
-afinn = subset(sentiments, sentiments$lexicon == "AFINN") #one scientist labeling
-head(afinn)
-```
-
-```{r}
 nrc = subset(sentiments, sentiments$lexicon == 'nrc')
-head(nrc,30)
 ```
 
-
-
-```{r}
-affin_join_good = inner_join(tidy_format_good, afinn, by = c("term" = "word"))
-affin_join_good[1:10,]
-
-affin_join_bad = inner_join(tidy_format_bad, afinn, by = c("term" = "word"))
-affin_join_bad[1:10,]
-
-affin_join_good = affin_join_good %>% mutate(category = "good")
-affin_join_bad = affin_join_bad %>% mutate(category = "bad")
-
-affin_join = rbind(affin_join_good, affin_join_bad)
-
-```
-```{r}
-grouped_affin = affin_join %>% 
-  group_by(category, document) %>%
-  summarise(total_score  = sum(score)) %>%
-  arrange(total_score)
-```
-```{r}
-ggplot(grouped_affin, aes(document, total_score, col = category)) + geom_point()
-```
-
-```{r}
-plutchik_good = tidy_format_good %>% 
-  inner_join(nrc, by = c("term" = "word")) %>% 
-  filter(!sentiment %in% c("positive", "negative")) %>%
-  group_by(sentiment) %>%
-  summarise(total_count = sum(count))
-
-ggplot(plutchik_good, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
-```
-
-```{r}
-plutchik_bad = tidy_format_bad %>% 
-  inner_join(nrc, by = c("term" = "word")) %>% 
-  filter(!sentiment %in% c("positive", "negative")) %>%
-  group_by(sentiment) %>%
-  summarise(total_count = sum(count))
-
-ggplot(plutchik_bad, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
-```
+Here we can see how "good" and "bad" listings differ in terms of "positive" and "negative" sentiment.
 
 ```{r}
 plutchik_good = tidy_format_good %>% 
@@ -468,437 +383,96 @@ plutchik_good = tidy_format_good %>%
   group_by(sentiment) %>%
   summarise(total_count = sum(count))
 
-ggplot(plutchik_good, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
-```
+plutchik_good_plot = ggplot(plutchik_good, aes(sentiment, total_count, fill = sentiment))+ geom_bar(stat = "identity") + ylim(0, 80000) +  theme(axis.title.x = element_blank(), axis.title.y= element_blank(),legend.position = "none")
 
-```{r}
 plutchik_bad = tidy_format_bad %>% 
   inner_join(nrc, by = c("term" = "word")) %>% 
   filter(sentiment %in% c("positive", "negative")) %>%
   group_by(sentiment) %>%
   summarise(total_count = sum(count))
 
-ggplot(plutchik_bad, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
+plutchik_bad_plot = ggplot(plutchik_bad, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity") + ylim(0, 80000) + theme(axis.title.x = element_blank(), axis.title.y= element_blank(),legend.position = "none")
+
+plot_grid(plutchik_good_plot, plutchik_bad_plot, labels = c("Good", "Bad"), label_size = 12, label_x = 0.5, scale = 0.7)
+
+#ggsave("../figs/sentiment_positive_negative.png")
 ```
-
-```{r}
-#bad
-bind_pos_neg_polarity  = tidy_format_bad %>%
-  inner_join(lexicon3, by = c("term" = "word")) %>%
-  count(document, term, sentiment, wt = count) %>%
-  spread(sentiment, n, fill = 0) %>%
-  mutate(polarity = positive - negative)
-  
-  bing_polarity_doc  = bind_pos_neg_polarity %>%
-  group_by(document) %>%
-  summarise(summary_polarity = sum(polarity)) %>%
-  arrange(summary_polarity)
-hist(bing_polarity_doc$summary_polarity)
-
-```
-
-```{r}
-#bad
-bind_pos_neg_polarity = bind_pos_neg_polarity%>% 
-  mutate(positive_negative = ifelse(polarity > 0, "positive", "negative"))
-
-ggplot(bind_pos_neg_polarity, aes(reorder(term, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Airbnb Summaries Polarity")  +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2))
-
-```
-
-```{r}
-#good
-bind_pos_neg_polarity  = tidy_format_good %>%
-  inner_join(lexicon3, by = c("term" = "word")) %>%
-  count(document, term, sentiment, wt = count) %>%
-  spread(sentiment, n, fill = 0) %>%
-  mutate(polarity = positive - negative)
-  
-  bing_polarity_doc  = bind_pos_neg_polarity %>%
-  group_by(document) %>%
-  summarise(summary_polarity = sum(polarity)) %>%
-  arrange(summary_polarity)
-hist(bing_polarity_doc$summary_polarity)
-
-```
-
-```{r}
-#good
-bind_pos_neg_polarity = bind_pos_neg_polarity%>% 
-  mutate(positive_negative = ifelse(polarity > 0, "positive", "negative"))
-
-ggplot(bind_pos_neg_polarity, aes(reorder(term, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Airbnb Summaries Polarity")  +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2))
-
-```
-
-To be cont'd: "good" listings are more emotional.
-
-
-
-
-
-################drafts below#####################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```{r}
-polar_data_full %>% select(id, full_text, category) %>%
-group_by(category) %$% polarity(full_text)
-```
-
-```{r}
-polarity_summary  = polar_data_full_summary %>%
-group_by(category) %$% polarity(summary, category)
-polarity_summary
-```
-
-```{r}
-plot(polarity_summary)
-scores(polarity_summary)
-counts(polarity_summary)
-```
-
-Step 09: Sentiment analysis with emotions.
-
-```{r message=FALSE, warning=FALSE}
-get.dtm <- function(text.data, unique.only = F){
-  corpus = VCorpus(VectorSource(text.data))
-  dtm = DocumentTermMatrix(corpus, control = list(
-    tolower = TRUE,
-    removeNumbers = TRUE,#we aren't concerned with informativeness, so few clearning options
-    stopwords = TRUE,
-    removeNumbers = TRUE, 
-    removePunctuation = TRUE,
-    stripWhitespace = TRUE))
-  if (unique.only == T){
-    non_zero_entries = unique(DTM$i) #omits zero entries
-    dtm = dtm[non_zero_entries,]
-  }
-  return(dtm)
-}
-
-good = polar_data_full_summary %>% filter(category == "Good")
-bad = polar_data_full_summary %>% filter(category == "Bad")
-
-
-#tm_map(gt, stemDocument)
-dtm_good <- get.dtm(good$summary)
-dtm_matrix_good = as.matrix(dtm_good)
-dim(dtm_matrix_good)
-
-dtm_bad <- get.dtm(bad$summary)
-dtm_matrix_bad = as.matrix(dtm_bad)
-dim(dtm_matrix_bad)
-
-tidy_format_good = tidy(dtm_good)
-tidy_format_good
-
-tidy_format_bad = tidy(dtm_bad)
-tidy_format_bad
-```
-
-```{r}
-#sentiments dataframe from tidytext package
-lexicon = get_sentiments('afinn')
-lexicon %>% count(score)
-```
-```{r}
-lexicon2 = get_sentiments('nrc')#bing, loughran
-lexicon2_counts = lexicon2 %>% count(sentiment)
-lexicon2_counts
-```
-
-```{r}
-ggplot(lexicon2_counts, aes(sentiment, n)) + geom_col() 
-```
-```{r}
-lexicon3 = get_sentiments('bing')
-tidy_bing_words_good = inner_join(tidy_format_good, lexicon3, by = c("term" = "word"))
-tidy_bing_words_good = tidy_bing_words_good %>% mutate(index = as.numeric(document))
-tidy_bing_words_good
-
-
-tidy_bing_words_bad = inner_join(tidy_format_bad, lexicon3, by = c("term" = "word"))
-tidy_bing_words_bad = tidy_bing_words_bad %>% mutate(index = as.numeric(document))
-tidy_bing_words_bad
-
-```
-```{r}
-tidy_bing_words_good_count = tidy_bing_words_good %>%count(sentiment, index)
-tidy_bing_words_good_count
-
-tidy_bing_words_bad_count = tidy_bing_words_bad %>%count(sentiment, index)
-tidy_bing_words_bad_count
-```
-```{r}
-tidy_bing_words_good_spread = tidy_bing_words_good_count %>% spread(sentiment, n, fill = 0)
-tidy_bing_words_good_spread
-
-tidy_bing_words_bad_spread = tidy_bing_words_bad_count %>% spread(sentiment, n, fill = 0)
-tidy_bing_words_bad_spread
-```
-Results are skewed more positvely so difficult to infer.
-
-```{r}
-data(sentiments)
-afinn = subset(sentiments, sentiments$lexicon == "AFINN") #one scientist labeling
-head(afinn)
-```
-```{r}
-nrc = subset(sentiments, sentiments$lexicon == 'nrc')
-head(nrc,30)
-```
-
-
-```{r}
-affin_join_good = inner_join(tidy_format_good, afinn, by = c("term" = "word"))
-affin_join_good[1:10,]
-
-affin_join_bad = inner_join(tidy_format_bad, afinn, by = c("term" = "word"))
-affin_join_bad[1:10,]
-
-affin_join_good = affin_join_good %>% mutate(category = "good")
-affin_join_bad = affin_join_bad %>% mutate(category = "bad")
-
-affin_join = rbind(affin_join_good, affin_join_bad)
-
-```
-```{r}
-grouped_affin = affin_join %>% 
-  group_by(category, document) %>%
-  summarize(total_score  = sum(score)) %>%
-  arrange(total_score)
-```
-```{r}
-ggplot(grouped_affin, aes(document, total_score, col = category)) + geom_point()
-```
-Distribution is normal.
-
+Proportion of positive and negative sentiment for good and bad hosts is similar, however, amount of emotionally colored words is considerably higher for good hosts. This suggests that just a longer write up with the same amount of emotional intensity might do the trick for "bad" hosts. Same conclusion holds true, when we consider distinct categories based on Plutchik's wheel of emotions. In terms of emotional intensity, both groups show the same pattern. It suggests that host experiment little with emotion and hold to the standard descriptions. Given overall positive nature of emotions in the narrative, it might be useful to further explore how going beyond the limit of standard emotional level one can alter performance on Airbnb.
 
 ```{r}
 plutchik_good = tidy_format_good %>% 
   inner_join(nrc, by = c("term" = "word")) %>% 
   filter(!sentiment %in% c("positive", "negative")) %>%
   group_by(sentiment) %>%
-  summarize(total_count = sum(count))
+  summarise(total_count = sum(count))
 
-ggplot(plutchik_good, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
-```
+plutchik_good_plot = ggplot(plutchik_good, aes(sentiment, total_count, fill = sentiment))+ geom_bar(stat = "identity") + ylim(0, 35000) +  theme(axis.title.x = element_blank(), axis.title.y= element_blank(),axis.text.x = element_text(angle = 90),legend.position = "none")
 
-```{r}
 plutchik_bad = tidy_format_bad %>% 
   inner_join(nrc, by = c("term" = "word")) %>% 
   filter(!sentiment %in% c("positive", "negative")) %>%
   group_by(sentiment) %>%
-  summarize(total_count = sum(count))
+  summarise(total_count = sum(count))
 
-ggplot(plutchik_bad, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity")
+plutchik_bad_plot = ggplot(plutchik_bad, aes(sentiment, total_count, fill = sentiment)) + geom_bar(stat = "identity") + ylim(0, 35000) + theme(axis.title.x = element_blank(), axis.title.y= element_blank(),axis.text.x = element_text(angle = 90),legend.position = "none")
+
+plot_grid(plutchik_good_plot, plutchik_bad_plot, labels = c("Good", "Bad"), label_size = 12, label_x = 0.5, scale = 0.7)
+
+#ggsave("../figs/sentiment_plutchik.png")
 ```
-#no insights
+Another perspective is to look at emotions with "bing" library, observing the same picture, but document-wise. 
 
-#redo as I added host since
-```{r message=FALSE, warning=FALSE}
-good = polar_data %>% filter(category == "Good")
-bad = polar_data %>% filter(category == "Bad")
+```{r warning=FALSE, message=FALSE}
+lexicon3 = get_sentiments('bing')
 
-dtm_good <- get.dtm(good$summary)
-dtm_matrix_good = as.matrix(dtm_good)
-dim(dtm_matrix_good)
-
-dtm_bad <- get.dtm(bad$summary)
-dtm_matrix_bad = as.matrix(dtm_bad)
-dim(dtm_matrix_bad)
-
-tidy_format_good = tidy(dtm_good)
-tidy_format_good
-
-tidy_format_bad = tidy(dtm_bad)
-tidy_format_bad
-
-
-
-plutchik2_good = tidy_format_good %>% 
-  inner_join(nrc, by = c("term" = "word")) %>% 
-  filter(!sentiment %in% c("positive", "negative")) %>%
-  group_by(sentiment) #%>%
-  #mutate(host_since = inner_join(test_df$host_since, by = "document"))
-plutchik2_good$document = as.numeric(plutchik2_good$document)
-date_plutchik2_good = inner_join(plutchik2_good,good, by = "document") %>%
-  group_by(document,host_since, sentiment) %>%
-  summarize(total_count = sum(count))
-  
-  
-  
-ggplot(date_plutchik2_good, aes(date(host_since), total_count)) + geom_smooth() + facet_wrap(~sentiment) 
-
-```
-
-```{r message=FALSE, warning=FALSE}
-test_df = data %>% select(id, summary, price, review_scores_rating, host_since) %>% head(200)
-test_df <- cbind(document = as.numeric(rownames(test_df)), test_df)
-plutchik2 = tidy_format_good %>% 
-  inner_join(nrc, by = c("term" = "word")) %>% 
-  filter(!sentiment %in% c("positive", "negative")) %>%
-  group_by(sentiment) #%>%
-  #mutate(host_since = inner_join(test_df$host_since, by = "document"))
-plutchik2$document = as.numeric(plutchik2$document)
-date_plutchik2 = inner_join(plutchik2,test_df, by = "document") %>%
-  group_by(document,host_since, sentiment) %>%
-  summarize(total_count = sum(count))
-  
-  
-  
-ggplot(date_plutchik2, aes(date(host_since), total_count)) + geom_smooth() + facet_wrap(~sentiment) 
-
-```
-Not sure how valuable this is as it is not really timeseries, just the date the host started on airbnb...
-
-```{r message=FALSE, warning=FALSE}
-test_df = data %>% select(id, summary, price, review_scores_rating, host_since) %>% head(200)
-test_df <- cbind(document = as.numeric(rownames(test_df)), test_df)
-plutchik2 = tidy_format_bad %>% 
-  inner_join(nrc, by = c("term" = "word")) %>% 
-  filter(!sentiment %in% c("positive", "negative")) %>%
-  group_by(sentiment) #%>%
-  #mutate(host_since = inner_join(test_df$host_since, by = "document"))
-plutchik2$document = as.numeric(plutchik2$document)
-date_plutchik2 = inner_join(plutchik2,test_df, by = "document") %>%
-  group_by(document,host_since, sentiment) %>%
-  summarize(total_count = sum(count))
-  
-  
-  
-ggplot(date_plutchik2, aes(date(host_since), total_count)) + geom_smooth() + facet_wrap(~sentiment) 
-
-```
-smth might be interesting about those trends. Maybe the anticipation slot because it is a more popular emotion in the BAD category.
-
-
-```{r}
-#good
-bind_pos_neg_polarity  = tidy_format_good %>%
+bing_pos_neg_polarity_bad = tidy_format_bad %>%
   inner_join(lexicon3, by = c("term" = "word")) %>%
   count(document, term, sentiment, wt = count) %>%
   spread(sentiment, n, fill = 0) %>%
-  mutate(polarity = positive - negative)
-  
-  bing_polarity_doc  = bind_pos_neg_polarity %>%
-  group_by(document) %>%
-  summarise(summary_polarity = sum(polarity)) %>%
-  arrange(summary_polarity)
-hist(bing_polarity_doc$summary_polarity)
-
-```
-```{r}
-#good
-bind_pos_neg_polarity = bind_pos_neg_polarity%>% 
+  mutate(polarity = positive - negative) %>%
   mutate(positive_negative = ifelse(polarity > 0, "positive", "negative"))
 
-ggplot(bind_pos_neg_polarity, aes(reorder(term, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Airbnb Summaries Polarity")  +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2))
+polarity_plot_bad = ggplot(bing_pos_neg_polarity_bad, aes(reorder(document, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Polarity - Bad Listings")  + xlab("Listings") +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2)) + ylim(-40, 100) + theme(axis.text.x = element_blank(), axis.title.y= element_blank(),legend.position = "none")
 
-```
-
-```{r}
-#good
-pol_subsections = function(df){
-  x.pos = subset(df$text, df$polarity > 0)
-  x.neg = subset(df$text, df$polarity < 0)
-  x.pos = paste(x.pos, collapse = " ")
-  x.neg = paste(x.neg, collapse = " ")
-  all.terms = c(x.pos, x.neg)
-  return(all.terms)
-  
-}
-
-text_polarity = counts(polarity_summary) 
-text_polarity = text_polarity %>% select( id  = id, polarity = polarity,text = text.var)
-all_terms = pol_subsections(text_polarity) 
-
-all_corpus = all_terms %>% VectorSource() %>% VCorpus()
-
-all_tdm = TermDocumentMatrix(all_corpus, control = list(removePunctuation = TRUE, stopwords = stopwords(kind = "en"))) %>%
-  as.matrix() %>%
-  set_colnames(c('positive', 'negative'))
-#smth wrong here
-comparison.cloud(all_tdm, max.words = 70, scale=c(2,.05), colors = c("darkgreen", "darkred"))
-class(all_tdm)
-```
-
-```{r}
-#bad
-bind_pos_neg_polarity  = tidy_format_bad %>%
+bing_pos_neg_polarity_good = tidy_format_good %>%
   inner_join(lexicon3, by = c("term" = "word")) %>%
   count(document, term, sentiment, wt = count) %>%
   spread(sentiment, n, fill = 0) %>%
-  mutate(polarity = positive - negative)
-  
-  bing_polarity_doc  = bind_pos_neg_polarity %>%
-  group_by(document) %>%
-  summarise(summary_polarity = sum(polarity)) %>%
-  arrange(summary_polarity)
-hist(bing_polarity_doc$summary_polarity)
-
-```
-
-```{r}
-#bad
-bind_pos_neg_polarity = bind_pos_neg_polarity%>% 
+  mutate(polarity = positive - negative) %>%
   mutate(positive_negative = ifelse(polarity > 0, "positive", "negative"))
 
-ggplot(bind_pos_neg_polarity, aes(reorder(term, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Airbnb Summaries Polarity")  +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2))
+polarity_plot_good = ggplot(bing_pos_neg_polarity_good, aes(reorder(document, polarity), polarity, fill = positive_negative)) + geom_col() + ggtitle("Polarity - Good Listings")  + xlab("Listings") +theme(axis.text.x = element_text(angle = 90, vjust = -0.1, size = 2)) + ylim(-40, 100) + theme(axis.text.x = element_blank(), axis.title.y= element_blank(),legend.position = "none")
+
+plot_grid(polarity_plot_bad, polarity_plot_good)
+
+#ggsave("../figs/polarity plot.png")
 
 ```
 
-```{r}
-#bad
-pol_subsections = function(df){
-  x.pos = subset(df$text, df$polarity > 0)
-  x.neg = subset(df$text, df$polarity < 0)
-  x.pos = paste(x.pos, collapse = " ")
-  x.neg = paste(x.neg, collapse = " ")
-  all.terms = c(x.pos, x.neg)
-  return(all.terms)
-  
-}
+Per document view help to cofidently conclude that it is no the sweetness of message that characterises a successful write up, and the assumption that successful listings are puraly more positive is wrong. It is not the polarity of emotion, but amount of emotion drives success.
 
-text_polarity = counts(polarity_summary) 
-text_polarity = text_polarity %>% select( id  = id, polarity = polarity,text = text.var)
-all_terms = pol_subsections(text_polarity) 
+# Conclusion.
 
-all_corpus = all_terms %>% VectorSource() %>% VCorpus()
+Most people think that business improvement come with additional financial investment. We conducted the analysis that offers tips on how to improve Airbnb performance for free - by writing a great description of your apartment. Here are the tips we discovered.
 
-all_tdm = TermDocumentMatrix(all_corpus, control = list(removePunctuation = TRUE, stopwords = stopwords(kind = "en"))) %>%
-  as.matrix() %>%
-  set_colnames(c('positive', 'negative'))
-#smth wrong here
-comparison.cloud(all_tdm, max.words = 70, scale=c(2,.05), colors = c("darkgreen", "darkred"))
+**What you should do to create a great description of your apartment on Airbnb.**
 
-```
+1. Write more across all textual categories, don't ignore optional fields. Your overall listing should contain between 2500 and 3500 words to be successful.
+2. Write a description of 1000 words.
+3. Do not rely on exclamation marks to drive attention, this is not what best hosts do to differentiate.
+4. If you want to skip a category, skip "about host category".
+5. Make it person openness to "questions".
+6. Use proper English and standard keyboard.
+7. Mention social clues (such as membership and charity) and fancy notions (such as "manor" instead of "house")
+8. Add emotion by adding more textual description, not by short and excessively "sweet"" messages.
+
+__________
+
+References
+
+1. Julia Silge, David Robinson. Text Mining with R. 2018. https://www.tidytextmining.com 
+2. Text Mining Tutorial. https://www.kaggle.com/rtatman/nlp-in-r-topic-modelling 
+3. Debbie Liske. Tidy Sentiment Analysis in R. 2018. https://www.datacamp.com/community/tutorials/sentiment-analysis-R
+
+
 
