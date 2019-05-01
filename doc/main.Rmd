@@ -307,28 +307,6 @@ Here, summary fo the topics may be the following: (1) combination on space, floo
 
 "Bathroom" is a leading word for a "good topic", mentioning "kitchen" is controversial. 
 
-```{r}
-#!!! MAX, I didnt touch it, please, decive what you want to do with it. renamed the df as it interferes with further flow
- # integrate the topics into the base dataset #
-  #corpus_mk = getCorpus(polar_data_full$full_text)
-  #DTM_mk = DocumentTermMatrix(corpus_mk)
-  
-  #unique_indexes_mk = unique(DTM_mk$i) 
-  #DTM_mk = DTM_mk[unique_indexes_mk,]
-  
-  #lda = LDA(DTM_mk, k = 4, method = "Gibbs", control = list(iter = 2000,  thin = 400, nstart = 5, best = T, seed = list(1234, 423, 2211, #1122, 3345)))
-
-#topics_words <- tidy(lda, matrix = 'beta')
-##topics_docs <- tidy(lda, matrix = 'gamma')
-#topics_docs <- topics_docs %>% spread(topic, gamma)
-#topics_docs$document <- as.integer(topics_docs$document)
-#polar_data_full_1 <- polar_data_full %>% mutate(tag = row_number())
-#polar_data_full_1 <- polar_data_full_1 %>% inner_join(topics_docs, by = c('tag' = 'document'))
-#common_topic <- as.data.frame(t(apply(polar_data_full_1[,112:115], 1, function(x) as.numeric(x == max(x)))))
-#polar_data_full_1 <- polar_data_full_1 %>% cbind(common_topic)
-
-```
-
 ## 4.3 TD_IDF Analysis of Categories.
 
 Analysis is performed on 'summary' data.
